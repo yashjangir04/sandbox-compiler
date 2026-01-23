@@ -10,11 +10,11 @@ app.use(express.json());
 const port = process.env.PORT || 3000;
 
 app.get("/", (req, res) => {
-  res.send("Hello World!");
+  res.send("Judge Backend Running");
 });
 
 app.post("/compile", (req, res) => {
-  const {
+  let {
     code,
     language,
     input = "",
@@ -28,6 +28,10 @@ app.post("/compile", (req, res) => {
       message: "Code and language are required",
     });
   }
+
+  // Normalize newlines (Windows → Linux)
+  code = code.replace(/\r\n/g, "\n");
+  input = input.replace(/\r\n/g, "\n");
 
   const jobId = Date.now().toString();
   const jobsRoot = path.join(__dirname, "jobs");
@@ -47,62 +51,52 @@ app.post("/compile", (req, res) => {
 
   fs.writeFileSync(path.join(jobDir, fileName), code);
 
-  let dockerCmd;
-
-  if (input.trim() === "") {
-    dockerCmd =
-      `docker run --rm ` +
-      `--memory=${memoryLimit}m ` +
-      `--cpus=1 ` +
-      `--network=none ` +
-      `-v "${jobDir}:/workspace" ` +
-      `judge-sandbox ${language} ${timeLimit}`;
-  } else {
-    const safeInput = input.replace(/"/g, '\\"');
-    dockerCmd =
-      `echo "${safeInput}" | ` +
-      `docker run --rm ` +
-      `--memory=${memoryLimit}m ` +
-      `--cpus=1 ` +
-      `--network=none ` +
-      `-v "${jobDir}:/workspace" ` +
-      `judge-sandbox ${language} ${timeLimit}`;
-  }
+  const dockerCmd =
+    `docker run --rm ` +
+    `--memory=${memoryLimit}m ` +
+    `--cpus=1 ` +
+    `--network=none ` +
+    `-v "${jobDir}:/workspace" ` +
+    `judge-sandbox ${language} ${timeLimit}`;
 
   exec(
     dockerCmd,
-    { timeout: (timeLimit + 10) * 1000 },
+    {
+      timeout: (timeLimit + 2) * 1000,
+      input: input, // ✅ SAFE stdin
+    },
     (error, stdout, stderr) => {
       fs.rmSync(jobDir, { recursive: true, force: true });
 
       let verdict = "AC";
-      let output = stdout;
+      let output = stdout || "";
 
-      if (stderr && stderr.includes("error")) {
-        verdict = "CE";
-        output = stderr;
+      if (error) {
+        if (error.killed) {
+          verdict = "TLE";
+          output = "Time limit exceeded";
+        } else {
+          verdict = "RE";
+          output = stderr || error.message;
+        }
       }
 
-      if (error && error.killed) {
-        verdict = "TLE";
-        output = "Time limit exceeded";
-      }
-
-      if (stderr && stderr.includes("OOM")) {
-        verdict = "MLE";
-        output = "Memory limit exceeded";
-      }
-
-      if (error && verdict === "AC") {
-        verdict = "RE";
-        output = stderr || error.message;
+      if (stderr) {
+        if (stderr.includes("error")) {
+          verdict = "CE";
+          output = stderr;
+        }
+        if (stderr.toLowerCase().includes("oom")) {
+          verdict = "MLE";
+          output = "Memory limit exceeded";
+        }
       }
 
       return res.json({ verdict, output });
-    },
+    }
   );
 });
 
 app.listen(port, () => {
-  console.log(`Server is running on port ${port}`);
+  console.log(`Judge backend running on port ${port}`);
 });
