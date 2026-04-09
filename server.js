@@ -8,7 +8,7 @@ const app = express();
 app.use(express.urlencoded({ extended: true }));
 app.use(express.json());
 
-const port = process.env.PORT || 3000;
+const port = 3000;
 
 // function toDockerPath(winPath) {
 //   return winPath
@@ -110,6 +110,6 @@ app.get("/health" , (req, res) => {
   res.send("OK");
 });
 
-app.listen(port, () => {
+app.listen(port, "0.0.0.0", () => {
   console.log(`Judge backend running on port ${port}`);
 });
