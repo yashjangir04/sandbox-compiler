@@ -106,6 +106,10 @@ app.post("/compile", (req, res) => {
   child.stdin.end();
 });
 
+app.get("/health" , (req, res) => {
+  res.send("OK");
+});
+
 app.listen(port, "0.0.0.0", () => {
   console.log(`Judge backend running on port ${port}`);
 });
