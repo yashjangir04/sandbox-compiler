@@ -110,6 +110,6 @@ app.get("/health" , (req, res) => {
   res.send("OK");
 });
 
-app.listen(port, "0.0.0.0", () => {
+app.listen(port, () => {
   console.log(`Judge backend running on port ${port}`);
 });
